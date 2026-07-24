@@ -1,0 +1,11 @@
+{
+  "name": "Electrónica de Occidente",
+  "short_name": "Electrónica",
+  "description": "Registro técnico de reparaciones de televisores",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f4f6",
+  "theme_color": "#111827",
+  "lang": "es"
+}
