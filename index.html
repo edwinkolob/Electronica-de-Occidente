@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111827">
+<title>Electrónica de Occidente - Reparaciones TV</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root{font-family:system-ui,sans-serif;color:#111827;background:#f3f4f6}*{box-sizing:border-box}
+body{margin:0}.top{background:#111827;color:white;padding:18px}.top h1{margin:0;font-size:1.35rem}.top p{margin:5px 0 0;color:#d1d5db}
+main{max-width:1000px;margin:auto;padding:16px}.card{background:white;border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 4px 18px #0001}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.full{grid-column:1/-1}
+label{display:block;font-weight:700;margin-bottom:5px}input,textarea,button{width:100%;font:inherit;border-radius:10px}
+input,textarea{border:1px solid #d1d5db;padding:11px}textarea{min-height:85px;resize:vertical}
+button{border:0;padding:12px;font-weight:700;cursor:pointer}.primary{background:#2563eb;color:white}.secondary{background:#e5e7eb}.danger{background:#fee2e2;color:#991b1b}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto}.repair{border-top:1px solid #eee;padding:14px 0}.repair:first-child{border:0}
+.meta{color:#6b7280;font-size:.9rem}.photos{display:flex;gap:8px;overflow:auto;margin-top:8px}.photos img{width:120px;height:90px;object-fit:cover;border-radius:9px}
+.search{margin-bottom:12px}.empty{text-align:center;color:#6b7280;padding:24px}.badge{display:inline-block;background:#dbeafe;color:#1d4ed8;padding:3px 8px;border-radius:99px;font-size:.8rem}
+@media(max-width:650px){.grid{grid-template-columns:1fr}.full{grid-column:auto}}
+</style>
+</head>
+<body>
+<header class="top"><h1>🔧 Electrónica de Occidente</h1><p>Registro técnico de reparaciones de televisores</p></header>
+<main>
+<section class="card">
+<h2 id="formTitle">Nueva reparación</h2>
+<form id="form">
+<input type="hidden" id="editId">
+<div class="grid">
+<div><label>Marca</label><input id="marca" required placeholder="Samsung, LG, Sony..."></div>
+<div><label>Modelo</label><input id="modelo" required placeholder="Modelo del televisor"></div>
+<div class="full"><label>Síntoma</label><textarea id="sintoma" required placeholder="Ej: enciende, da imagen y se apaga..."></textarea></div>
+<div class="full"><label>Diagnóstico / falla encontrada</label><textarea id="diagnostico" placeholder="Mediciones, componentes dañados..."></textarea></div>
+<div class="full"><label>Solución</label><textarea id="solucion" required placeholder="Trabajo realizado y resultado"></textarea></div>
+<div class="full"><label>Imágenes</label><input id="imagenes" type="file" accept="image/*" multiple></div>
+<div class="full actions"><button class="primary" type="submit">💾 Guardar reparación</button><button class="secondary" type="button" id="cancel" hidden>Cancelar edición</button></div>
+</div></form>
+</section>
+<section class="card">
+<h2>Historial de reparaciones</h2>
+<input class="search" id="search" placeholder="🔍 Buscar por marca, modelo, síntoma, diagnóstico o solución">
+<div class="actions" style="margin-bottom:12px"><button class="secondary" id="exportBtn">Exportar copia</button><button class="secondary" id="importBtn">Restaurar copia</button><input id="importFile" type="file" accept=".json" hidden></div>
+<div id="list"></div>
+</section>
+</main>
+<script>
+const DB='tvRepairsDB', STORE='repairs'; let db;
+const req=indexedDB.open(DB,1);
+req.onupgradeneeded=e=>{db=e.target.result; if(!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE,{keyPath:'id'})};
+req.onsuccess=e=>{db=e.target.result; render()};
+const $=id=>document.getElementById(id);
+function all(){return new Promise((ok,no)=>{let r=db.transaction(STORE).objectStore(STORE).getAll();r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}
+function put(x){return new Promise((ok,no)=>{let r=db.transaction(STORE,'readwrite').objectStore(STORE).put(x);r.onsuccess=ok;r.onerror=()=>no(r.error)})}
+function del(id){return new Promise((ok,no)=>{let r=db.transaction(STORE,'readwrite').objectStore(STORE).delete(id);r.onsuccess=ok;r.onerror=()=>no(r.error)})}
+function filesToData(files){return Promise.all([...files].map(f=>new Promise(res=>{let r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(f)})))}
+$('form').onsubmit=async e=>{
+ e.preventDefault(); let id=$('editId').value||crypto.randomUUID(), old=(await all()).find(x=>x.id===id);
+ let newPics=await filesToData($('imagenes').files);
+ await put({id,fecha:old?.fecha||new Date().toISOString(),marca:$('marca').value.trim(),modelo:$('modelo').value.trim(),sintoma:$('sintoma').value.trim(),diagnostico:$('diagnostico').value.trim(),solucion:$('solucion').value.trim(),imagenes:[...(old?.imagenes||[]),...newPics]});
+ reset();render();
+};
+function reset(){$('form').reset();$('editId').value='';$('formTitle').textContent='Nueva reparación';$('cancel').hidden=true}
+$('cancel').onclick=reset;
+async function edit(id){let x=(await all()).find(r=>r.id===id);['marca','modelo','sintoma','diagnostico','solucion'].forEach(k=>$(k).value=x[k]||'');$('editId').value=id;$('formTitle').textContent='Editar reparación';$('cancel').hidden=false;scrollTo({top:0,behavior:'smooth'})}
+async function removeItem(id){if(confirm('¿Eliminar esta reparación?')){await del(id);render()}}
+function esc(s=''){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function render(){
+ let q=$('search').value.toLowerCase(), data=(await all()).sort((a,b)=>b.fecha.localeCompare(a.fecha)).filter(x=>Object.values(x).filter(v=>typeof v==='string').join(' ').toLowerCase().includes(q));
+ $('list').innerHTML=data.length?data.map(x=>`<article class="repair"><span class="badge">${esc(x.marca)}</span><h3>${esc(x.modelo)}</h3><div class="meta">${new Date(x.fecha).toLocaleString()}</div><p><b>Síntoma:</b> ${esc(x.sintoma)}</p>${x.diagnostico?`<p><b>Diagnóstico:</b> ${esc(x.diagnostico)}</p>`:''}<p><b>Solución:</b> ${esc(x.solucion)}</p><div class="photos">${(x.imagenes||[]).map(i=>`<img src="${i}">`).join('')}</div><div class="actions"><button class="secondary" onclick="edit('${x.id}')">✏️ Editar</button><button class="danger" onclick="removeItem('${x.id}')">🗑️ Eliminar</button></div></article>`).join(''):'<div class="empty">Todavía no hay reparaciones registradas.</div>';
+}
+$('search').oninput=render;
+$('exportBtn').onclick=async()=>{let blob=new Blob([JSON.stringify(await all())],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='copia_reparaciones_tv.json';a.click()};
+$('importBtn').onclick=()=>$('importFile').click();
+$('importFile').onchange=async e=>{try{let data=JSON.parse(await e.target.files[0].text());for(const x of data)await put(x);render();alert('Copia restaurada correctamente')}catch{alert('No se pudo restaurar el archivo')}};
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
+</script></body></html>
